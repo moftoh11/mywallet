@@ -1,0 +1,578 @@
+﻿<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<!--
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="apple-touch-icon" href="icon-192.png">
+-->
+  <title>محفظة فلوسي</title>
+  <link rel="stylesheet" href="styles.css" />
+
+<!-- تسجيل الـ Service Worker -->
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('Service Worker Registered!', reg))
+        .catch(err => console.error('Service Worker Error:', err));
+    });
+  }
+</script>
+
+</head>
+
+<body>
+  <div class="bg-shape shape-1"></div>
+  <div class="bg-shape shape-2"></div>
+
+  <main class="container">
+    <section id="authSection" class="card auth-card hidden">
+      <h1 style="margin-bottom: 1.5rem;">محفظة فلوسي</h1>
+      <p class="muted" id="authHint"></p>
+
+      <form id="setupForm" class="hidden">
+        <div class="input-group">
+          <label for="setupName">اسم المستخدم</label>
+          <input type="text" id="setupName" minlength="2" required />
+        </div>
+
+        <div class="input-group">
+          <label for="setupPassword">رمز الدخول (أرقام فقط)</label>
+          <input 
+            type="password" 
+            id="setupPassword" 
+            inputmode="numeric" 
+            pattern="[0-9]*" 
+            maxlength="8" 
+            placeholder="أدخل أرقام فقط" 
+            required 
+          />
+        </div>
+
+        <div class="input-group">
+          <label for="setupConfirmPassword">تأكيد رمز الدخول</label>
+          <input 
+            type="password" 
+            id="setupConfirmPassword" 
+            inputmode="numeric" 
+            pattern="[0-9]*" 
+            maxlength="8" 
+            placeholder="أعد كتابة الرمز" 
+            required 
+          />
+        </div>
+        <button type="submit" class="btn btn-primary">تفعيل الحماية</button>
+      </form>
+
+      <form id="loginForm" class="hidden">
+      <div class="input-group">
+        <label for="loginPassword">رمز الدخول</label>
+        <input 
+          type="password" 
+          id="loginPassword" 
+          inputmode="numeric" 
+          pattern="[0-9]*" 
+          maxlength="8" 
+          placeholder="أدخل الرمز الرقمي" 
+          required 
+        />
+      </div>
+        <div class="auth-actions">
+          <button type="submit" class="btn btn-primary">دخول</button>
+          <button type="button" id="biometricLoginBtn" class="btn">دخول بالبصمة</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="appSection" class="hidden">
+
+      <header class="topbar card">
+        <div>
+          <h2>محفظة فلوسي</h2>
+          <p class="muted" id="dashboardWelcome">مرحبًا بك</p>
+        </div>
+<!-- زرار عرض الرصيد الشيك -->
+  <button type="button" id="openBalanceToastBtn" class="btn-balance-toggle">
+    عرض الرصيد والمحافظ
+  </button>
+</div>
+
+<div id="balanceToastModal" class="toast-modal-overlay hidden">
+  <div class="toast-modal-card">
+    <div class="toast-modal-header">
+      <h3>تفاصيل الحساب والمحافظ</h3>
+      <button type="button" id="closeBalanceToastBtn" class="toast-close-btn">&times;</button>
+    </div>
+    <div class="toast-modal-body">
+      <div class="total-balance-box">
+        <span class="muted">إجمالي الرصيد الكلي:</span>
+        <!-- تأكد إن id هو totalBalance عشان يقراه الـ JS -->
+        <strong id="totalBalance">0.00 ج.م</strong> 
+      </div>
+      
+      <div class="toast-section-title">المحافظ الحالية</div>
+      <!-- تأكد إن id هو walletsContainer عشان الـ JS يرمي المحافظ جواه -->
+      <div id="walletsContainer" class="toast-wallets-grid"></div>
+    </div>
+  </div>
+</div>
+
+</header>
+
+      <nav class="tabs card">
+        <button class="tab-btn active" data-tab="transactionsTab">المعاملات</button>
+        <button class="tab-btn" data-tab="loansTab">السلف</button>
+        <button class="tab-btn" data-tab="recordsTab">السجل والبحث</button>
+        <button class="tab-btn" data-tab="statsTab">الإحصائيات</button>
+        <button class="tab-btn" data-tab="reportsTab">التقارير</button>
+        <button class="tab-btn" data-tab="settingsTab">الإعدادات</button>
+      </nav>
+
+      <section id="transactionsTab" class="tab-content card">
+        <h3>إضافة / تعديل معاملة</h3>
+        <form id="transactionForm" class="grid-form">
+          <input type="hidden" id="transactionId" />
+
+          <div class="input-group">
+            <label for="txAmount">المبلغ</label>
+            <input type="number" id="txAmount" min="0.01" step="0.01" required />
+          </div>
+
+          <div class="input-group">
+            <label>نوع المعاملة</label>
+            <div class="type-segmented-toggle">
+              <div class="toggle-option">
+                <input type="radio" id="typeExpense" name="txType" value="expense" checked required />
+                <label for="typeExpense">صرف</label>
+              </div>
+              <div class="toggle-option">
+                <input type="radio" id="typeIncome" name="txType" value="income" required />
+                <label for="typeIncome">استلام</label>
+              </div>
+            </div>
+          </div>
+          
+          <div class="input-group">
+            <label for="txCategory">التصنيف</label>
+            <select id="txCategory" required>
+              <option value="">اختر التصنيف</option>
+            </select>
+          </div>
+
+          <div class="input-group">
+            <label for="txWallet">المحفظة</label>
+            <select id="txWallet">
+              <option value="">اختر المحفظة</option>
+            </select>
+          </div>
+
+          <div class="input-group">
+            <label for="txPerson">الشخص / الجهة</label>
+            <input type="text" id="txPerson" placeholder="اختياري" />
+          </div>
+
+          <div class="input-group">
+            <label for="txDate">التاريخ والوقت</label>
+            <input type="datetime-local" id="txDate" required />
+          </div>
+
+          <div class="full-width input-group">
+            <label for="txDetails">التفاصيل</label>
+            <textarea id="txDetails" rows="3" placeholder="أدخل التفاصيل هنا..."></textarea>
+          </div>
+
+          <div class="form-actions full-width">
+            <button type="submit" class="btn btn-primary" id="txSubmitBtn">حفظ المعاملة</button>
+            <button type="button" class="btn" id="txCancelEditBtn">إلغاء التعديل</button>
+          </div>
+        </form>
+
+        <h3>سجل المعاملات</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>النوع</th>
+                <th>المبلغ</th>
+                <th>التصنيف</th>
+                <th>المحفظة</th>
+                <th>الشخص</th>
+                <th>الوقت</th>
+                <th>التفاصيل</th>
+                <th>إجراء</th>
+              </tr>
+            </thead>
+            <tbody id="transactionsTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="loansTab" class="tab-content card hidden">
+        <h3>إضافة / تعديل سلفة</h3>
+        <form id="loanForm" class="grid-form">
+          <input type="hidden" id="loanId" />
+
+          <div class="input-group">
+            <label for="loanAmount">المبلغ</label>
+            <input type="number" id="loanAmount" min="0.01" step="0.01" required />
+          </div>
+
+<div class="input-group">
+  <label>نوع السلفة</label>
+  <div class="type-segmented-toggle">
+    <div class="toggle-option">
+      <input type="radio" id="loanFromMe" name="loanDirection" value="from_me" checked required />
+      <label for="loanFromMe">سلفة منّي (أنا سلّفت)</label>
+    </div>
+    <div class="toggle-option">
+      <input type="radio" id="loanToMe" name="loanDirection" value="to_me" required />
+      <label for="loanToMe">سلفة إلیّ (أنا استلفت)</label>
+    </div>
+  </div>
+</div>
+<!-- داخل #loanForm -->
+<div class="form-group">
+  <label for="loanWallet">المحفظة <span class="required">*</span></label>
+  <select id="loanWallet" class="form-control" required>
+    <!-- سيتم تعبئتها أوتوماتيكياً عبر JS -->
+  </select>
+</div>
+          <div class="input-group">
+            <label for="loanPerson">الشخص</label>
+            <input type="text" id="loanPerson" required />
+          </div>
+
+          <div class="input-group">
+            <label for="loanDate">التاريخ والوقت</label>
+            <input type="datetime-local" id="loanDate" required />
+          </div>
+
+          <div class="full-width input-group">
+            <label for="loanDetails">التفاصيل</label>
+            <textarea id="loanDetails" rows="2" placeholder="اختياري"></textarea>
+          </div>
+
+          <div>
+            <label class="check-label">
+              <input type="checkbox" id="loanSettled" />
+              تم رد السلفة
+            </label>
+          </div>
+
+          <div class="form-actions full-width">
+            <button type="submit" class="btn btn-primary" id="loanSubmitBtn">حفظ السلفة</button>
+            <button type="button" class="btn" id="loanCancelEditBtn">إلغاء التعديل</button>
+          </div>
+        </form>
+
+        <h3>سجل السلف</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>النوع</th>
+                <th>المبلغ</th>
+                <th>المحفظة</th>
+                <th>الشخص</th>
+                <th>الوقت</th>
+                <th>الحالة</th>
+                <th>التفاصيل</th>
+                <th>إجراء</th>
+              </tr>
+            </thead>
+            <tbody id="loansTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="recordsTab" class="tab-content card hidden">
+        <h3>السجل الشامل والبحث</h3>
+
+        <form id="filtersForm" class="grid-form">
+          <div class="input-group">
+            <label for="filterKeyword">بحث نصي</label>
+            <input type="text" id="filterKeyword" placeholder="اسم / تصنيف / تفاصيل" />
+          </div>
+
+          <div class="input-group">
+            <label for="filterType">النوع</label>
+            <select id="filterType">
+              <option value="all">الكل</option>
+              <option value="income">استلام</option>
+              <option value="expense">صرف</option>
+              <option value="from_me">سلفة مني</option>
+              <option value="to_me">سلفة إلي</option>
+            </select>
+          </div>
+
+          <div class="input-group">
+            <label for="filterPerson">الشخص</label>
+            <input type="text" id="filterPerson" placeholder="فلترة حسب الشخص" />
+          </div>
+
+          <div class="input-group">
+            <label for="filterFromDate">من تاريخ</label>
+            <input type="date" id="filterFromDate" />
+          </div>
+
+          <div class="input-group">
+            <label for="filterToDate">إلى تاريخ</label>
+            <input type="date" id="filterToDate" />
+          </div>
+
+          <div class="form-actions full-width">
+            <button type="submit" class="btn btn-primary">تطبيق الفلتر</button>
+            <button type="button" id="clearFiltersBtn" class="btn">مسح الفلتر</button>
+          </div>
+        </form>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>السجل</th>
+                <th>النوع</th>
+                <th>المبلغ</th>
+                <th>التصنيف / الشخص</th>
+                <th>الوقت</th>
+                <th>الحالة</th>
+                <th>التفاصيل</th>
+              </tr>
+            </thead>
+            <tbody id="recordsTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="statsTab" class="tab-content card hidden">
+        <h3>الإحصائيات</h3>
+        <form id="statsFilterForm" class="grid-form">
+          <div class="input-group">
+            <label for="statsFromDate">من تاريخ</label>
+            <input type="date" id="statsFromDate" required />
+          </div>
+          <div class="input-group">
+            <label for="statsToDate">إلى تاريخ</label>
+            <input type="date" id="statsToDate" required />
+          </div>
+          <div class="form-actions full-width">
+            <button type="submit" class="btn btn-primary">تطبيق الفترة</button>
+            <button type="button" class="btn" id="statsResetBtn">إعادة الضبط</button>
+          </div>
+        </form>
+        <div class="stats-grid">
+          <article class="mini-card">
+            <span class="muted">إجمالي الاستلام</span>
+            <strong id="statIncome">0.00</strong>
+          </article>
+          <article class="mini-card">
+            <span class="muted">إجمالي الصرف</span>
+            <strong id="statExpense">0.00</strong>
+          </article>
+          <article class="mini-card">
+            <span class="muted">إجمالي سلف إليّ</span>
+            <strong id="statLoanToMe">0.00</strong>
+          </article>
+          <article class="mini-card">
+            <span class="muted">إجمالي سلف منّي</span>
+            <strong id="statLoanFromMe">0.00</strong>
+          </article>
+          <article class="mini-card">
+            <span class="muted">صافي السلف غير المسددة</span>
+            <strong id="statLoanEffect">0.00</strong>
+          </article>
+          <article class="mini-card">
+            <span class="muted">عدد السلف</span>
+            <strong id="statLoansCount">0</strong>
+          </article>
+          <article class="mini-card">
+            <span class="muted">عدد السجلات</span>
+            <strong id="statRecordsCount">0</strong>
+          </article>
+        </div>
+
+        <div class="charts-grid">
+          <div class="chart-card">
+            <h4>مقارنة الاستلام والصرف</h4>
+            <canvas id="incomeExpenseChart" width="400" height="250"></canvas>
+          </div>
+
+          <div class="chart-card">
+            <h4>توزيع حسب التصنيف</h4>
+            <canvas id="categoryChart" width="400" height="250"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section id="reportsTab" class="tab-content card hidden">
+        <h3>التقارير</h3>
+
+        <form id="reportForm" class="grid-form">
+          <div class="input-group">
+            <label for="reportFrom">بداية الفترة</label>
+            <input type="date" id="reportFrom" required />
+          </div>
+
+          <div class="input-group">
+            <label for="reportTo">نهاية الفترة</label>
+            <input type="date" id="reportTo" required />
+          </div>
+
+          <div class="form-actions full-width">
+            <button type="submit" class="btn btn-primary">إنشاء التقرير</button>
+          </div>
+        </form>
+
+        <article id="reportResult" class="report-box hidden"></article>
+      </section>
+
+      <section id="settingsTab" class="tab-content card hidden">
+        <h3>الإعدادات والأمان</h3>
+
+<!--
+==============================
+========== Settings ==========
+==============================
+-->
+
+
+        <!-- Categories -->
+        <section class="category-manager card" aria-labelledby="categoriesTitle">
+          <div class="section-heading">
+            <div>
+              <h4 id="categoriesTitle">التصنيفات</h4>
+              <p class="muted">تظهر هذه القائمة عند إضافة أو تعديل أي معاملة.</p>
+            </div>
+          </div>
+
+          <form id="categoryForm" class="category-form card">
+            <div class="input-group" style="flex: 1;">
+              <label for="categoryName">اسم التصنيف</label>
+              <input type="text" id="categoryName" maxlength="40" placeholder="مثال: طعام أو راتب" required />
+            </div>
+            <button type="submit" class="btn btn-primary" id="categorySubmitBtn">إضافة التصنيف</button>
+            <button type="button" class="btn hidden" id="categoryCancelEditBtn">إلغاء</button>
+          </form>
+
+          <div id="categoriesList" class="category-list" aria-live="polite"></div>
+        </section>
+
+        <!-- Wallets -->
+        <section class="wallet-manager card">
+          <h4>إدارة المحافظ المالية</h4>
+          <p class="muted">أضف عدل أو احذف المحافظ الرصيد الكلي يحسب تلقائيا منهم.</p>
+          
+          <form id="walletForm" class="grid-form">
+            <input type="hidden" id="walletId" />
+            <div class="input-group">
+              <label for="walletName">اسم المحفظة</label>
+              <input type="text" id="walletName" placeholder="مثال: كاش، كارت الأهلي، فودافون كاش" required />
+            </div>
+            <div class="input-group">
+              <label for="walletBalance">الرصيد الأولي / الحالي</label>
+              <input type="number" id="walletBalance" step="0.01" placeholder="0.00" required />
+            </div>
+            <div class="form-actions full-width">
+              <button type="submit" id="walletSubmitBtn" class="btn btn-primary">حفظ المحفظة</button>
+              <button type="button" id="walletCancelEditBtn" class="btn hidden">إلغاء</button>
+            </div>
+          </form>
+
+          <div class="table-wrap" style="margin-top: 10px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>اسم المحفظة</th>
+                  <th>الرصيد</th>
+                  <th>إجراء</th>
+                </tr>
+              </thead>
+              <tbody id="walletsTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Security -->
+        <div class="grid-form card">
+
+          <div class="section-heading">
+            <div>
+              <h4 id="categoriesTitle">الأمان والحساب</h4>
+              <p class="muted">تحكم في الأمان واسم المستخدم ورمز الدخول</p>
+            </div>
+          </div>
+
+          <form id="profileForm" class="grid-form" style="padding: 0; margin-bottom: 24px;">
+            <div class="input-group">
+              <label for="profileName">اسم المستخدم</label>
+              <input type="text" id="profileName" minlength="2" required />
+            </div>
+            <div class="form-actions full-width">
+              <button type="submit" class="btn btn-primary">حفظ الاسم</button>
+            </div>
+          </form>
+
+
+          <form id="changePasswordForm" class="grid-form" style="padding: 0;">
+            <div class="input-group">
+              <label for="currentPassword">رمز الدخول الحالي</label>
+              <input type="password" id="currentPassword" inputmode="numeric" pattern="[0-9]*" maxlength="8" required />
+            </div>
+
+            <div class="input-group">
+              <label for="newPassword">رمز الدخول الجديد</label>
+              <input type="password" id="newPassword" inputmode="numeric" pattern="[0-9]*" maxlength="8" required />
+            </div>
+
+            <div class="input-group">
+              <label for="newPasswordConfirm">تأكيد الرمز الجديد</label>
+              <input type="password" id="newPasswordConfirm" inputmode="numeric" pattern="[0-9]*" maxlength="8" required />
+            </div>
+
+            <div class="form-actions full-width">
+              <button type="submit" class="btn btn-primary">تغيير كلمة المرور</button>
+            </div>
+
+            <div class="settings-row">
+              <button type="button" id="registerBiometricBtn" class="btn btn-primary">تفعيل بصمة الدخول</button>
+              <button type="button" id="removeBiometricBtn" class="btn">إزالة بصمة الدخول</button>
+            </div>
+
+            <div class="settings-row">
+              <button type="button" id="logoutBtn" class="btn">تسجيل الخروج</button>
+            </div>
+          </form>
+
+        </div>
+
+        <!-- Backups -->
+        <div class="settings-row card">
+        
+          <div class="section-heading">
+            <div>
+              <h4 id="categoriesTitle">النسخ الاحتياطي</h4>
+              <p class="muted">إدارة النسخ الاحتياطية وتصدير واستيراد البيانات</p>
+            </div>
+          </div>
+
+          <button type="button" id="exportBtn" class="btn btn-primary">تصدير Excel (CSV)</button>
+          <label class="file-btn btn btn-primary" for="importFile">استيراد Excel (CSV)</label>
+          <input type="file" id="importFile" accept=".csv" hidden />
+          <button type="button" id="exportBackupBtn" class="btn btn-primary">تصدير نسخة احتياطية JSON</button>
+          <input type="file" id="importBackupFile" accept=".json" hidden />
+          <button type="button" id="importBackupBtn" class="btn btn-primary">استيراد JSON</button>
+        </div>
+
+
+      </section>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
