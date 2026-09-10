@@ -25,7 +25,7 @@ jobs:
         java-version: '17'
 
     - name: Install Dependencies
-      run: npm install
+      run: npm install @capacitor/core @capacitor/cli @capacitor/android
 
     - name: Sync Capacitor
       run: npx cap sync android
