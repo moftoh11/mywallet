@@ -25,7 +25,10 @@ jobs:
         java-version: '21'
 
     - name: Install Dependencies
-      run: npm install @capacitor/core @capacitor/cli @capacitor/android
+      run: |
+        npm install @capacitor/core @capacitor/cli @capacitor/android
+        npm install @capacitor-community/native-biometric
+        npm install @capacitor/filesystem @capacitor/share
 
     - name: Sync Capacitor
       run: npx cap sync android
