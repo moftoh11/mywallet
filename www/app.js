@@ -1,4 +1,6 @@
-﻿const STORAGE_KEY = "wallet_app_v1";
+const { NativeBiometric } = window.Capacitor ? window.Capacitor.Plugins : {};
+const { Filesystem, Directory, Encoding } = window.Capacitor ? window.Capacitor.Plugins : {};
+const { Share } = window.Capacitor ? window.Capacitor.Plugins : {}; const STORAGE_KEY = "wallet_app_v1";
 const DEFAULT_CATEGORIES = ["طعام", "مواصلات", "سكن", "فواتير", "تسوق", "راتب", "عمل إضافي", "ادخار"];
 
 const defaultState = {
@@ -220,10 +222,19 @@ function initAuthMode() {
 
   if (hasPassword) {
     el.authHint.textContent = `مرحبًا ${getDisplayName()}، أدخل كلمة المرور أو استخدم البصمة للدخول`;
+    // فوكس تلقائي على خانة تسجيل الدخول
+    setTimeout(() => {
+      if (el.loginPassword) el.loginPassword.focus();
+    }, 50);
   } else {
     el.authHint.textContent = "أول استخدام: أنشئ كلمة مرور لتأمين التطبيق";
+    // فوكس تلقائي على خانة الاسم عند أول إعداد
+    setTimeout(() => {
+      if (el.setupName) el.setupName.focus();
+    }, 50);
   }
 }
+
 
 async function onSetupPassword(event) {
   event.preventDefault();
@@ -1286,85 +1297,69 @@ async function onChangePassword(event) {
   showToast("تم تغيير كلمة المرور");
 }
 
+// 1. دالة تسجيل/تفعيل البصمة
 async function onRegisterBiometric() {
-  if (!window.PublicKeyCredential || !navigator.credentials) {
-    showToast("المتصفح لا يدعم بصمة الويب");
-    return;
-  }
-
   try {
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const userId = crypto.getRandomValues(new Uint8Array(16));
-
-    const credential = await navigator.credentials.create({
-      publicKey: {
-        challenge,
-        rp: { name: "المحفظة الذكية" },
-        user: {
-          id: userId,
-          name: "wallet-local-user",
-          displayName: "Wallet Local User"
-        },
-        pubKeyCredParams: [
-          { type: "public-key", alg: -7 },
-          { type: "public-key", alg: -257 }
-        ],
-        timeout: 60000,
-        authenticatorSelection: { userVerification: "preferred" },
-        attestation: "none"
-      }
-    });
-
-    if (!credential) {
-      showToast("فشلت عملية التسجيل بالبصمة");
+    // التأكد إن الجهاز فيه بصمة ومتفعلة
+    const result = await NativeBiometric.isAvailable();
+    if (!result.isAvailable) {
+      showToast("البصمة غير متاحة على هذا الجهاز");
       return;
     }
 
+    // إظهار نافذة البصمة لتأكيد هوية المستخدم أول مرة
+    await NativeBiometric.verifyIdentity({
+      reason: "تأكيد البصمة لتفعيل الدخول السريع",
+      title: "تفعيل البصمة",
+      subtitle: "استخدم بصمة الاصبع أو الوجه",
+      description: "يرجى اللمس للمتابعة"
+    });
+
+    // حفظ حالة التفعيل في الـ state
     state.settings.biometricEnabled = true;
-    state.settings.biometricCredentialId = credential.id;
     saveState();
     initAuthMode();
     showToast("تم تفعيل البصمة بنجاح");
   } catch (err) {
-    showToast("تعذر تسجيل البصمة على جهازك");
+    showToast("فشلت عملية تفعيل البصمة");
   }
 }
 
-function onRemoveBiometric() {
-  state.settings.biometricEnabled = false;
-  state.settings.biometricCredentialId = "";
-  saveState();
-  initAuthMode();
-  showToast("تم إلغاء تفعيل البصمة");
-}
-
+// 2. دالة الدخول بالبصمة
 async function onBiometricLogin() {
-  if (!state.settings.biometricEnabled || !state.settings.biometricCredentialId) {
+  if (!state.settings.biometricEnabled) {
     showToast("البصمة غير مفعلة");
     return;
   }
 
   try {
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const assertion = await navigator.credentials.get({
-      publicKey: {
-        challenge,
-        timeout: 60000,
-        allowCredentials: [{
-          type: "public-key",
-          id: bufferFromBase64(state.settings.biometricCredentialId)
-        }],
-        userVerification: "preferred"
-      }
+    // إظهار نافذة البصمة الخاصة بالاندرويد
+    await NativeBiometric.verifyIdentity({
+      reason: "تسجيل الدخول للمحفظة",
+      title: "تسجيل الدخول",
+      subtitle: "المحفظة الذكية",
+      description: "يرجى مسح البصمة للدخول"
     });
 
-    if (assertion) {
-      unlockApp();
-      showToast("تم الدخول بالبصمة بنجاح");
-    }
-  } catch {
+    // لو البصمة صحيحة هيعدي السطر اللي فوق ويدخل هنا تلقائياً
+    unlockApp();
+    showToast("تم الدخول بنجاح");
+  } catch (err) {
     showToast("فشل التحقق من البصمة");
   }
+}
+
+// 3. دالة إلغاء البصمة
+function onRemoveBiometric() {
+  if (!state.settings.biometricEnabled) {
+    showToast("البصمة غير مفعلة بالفعل");
+    return;
+  }
+
+  state.settings.biometricEnabled = false;
+  saveState();
+  initAuthMode();
+  showToast("تم إيقاف تفعيل البصمة بنجاح");
 }
 
 function onSaveWallet(event) {
@@ -1585,17 +1580,45 @@ function onImportJsonBackup(event) {
   event.target.value = "";
 }
 
-function downloadFile(filename, type, content) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+async function downloadFile(filename, type, content) {
+  // لو شغال على أندرويد (تطبيق Capacitor)
+  if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+    try {
+      // 1. كتابة الملف في مجلد Cache/Documents الخاص بالتطبيق
+      const result = await Filesystem.writeFile({
+        path: filename,
+        data: content,
+        directory: Directory.Cache,
+        encoding: Encoding.UTF8
+      });
+
+      // 2. فتح قائمة المشاركة لإنزال الملف أو حفظه في الموبايل
+      await Share.share({
+        title: 'تصدير بيانات المحفظة',
+        text: `ملف ${filename}`,
+        url: result.uri,
+        dialogTitle: 'حفظ الملف أو مشاركته'
+      });
+
+      showToast("تم جاهزية الملف للتصدير");
+    } catch (err) {
+      console.error("Export Error:", err);
+      showToast("فشل تصدير الملف على الجهاز");
+    }
+  } else {
+    // لو شغال على متصفح عادي (Web Browser)
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 }
+
 
 function showWalletsPreview() {
   const content = state.wallets.map(w => `${w.name}: ${formatMoney(w.balance)}`).join("\n");
