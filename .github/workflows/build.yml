@@ -27,7 +27,7 @@ jobs:
     - name: Install Dependencies
       run: |
         npm install @capacitor/core @capacitor/cli @capacitor/android
-        npm install @capacitor-community/native-biometric
+        npm install capacitor-native-biometric
         npm install @capacitor/filesystem @capacitor/share
 
     - name: Sync Capacitor
