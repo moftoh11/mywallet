@@ -1581,31 +1581,26 @@ function onImportJsonBackup(event) {
 }
 
 async function downloadFile(filename, type, content) {
-  // التأكد إننا جوة تطبيق الأندرويد Native
   if (window.Capacitor && window.Capacitor.isNativePlatform()) {
     try {
-      // 1. كتابة الملف في مساحات التطبيق المؤقتة
       const writeResult = await window.Capacitor.Plugins.Filesystem.writeFile({
         path: filename,
         data: content,
-        directory: 'CACHE', // كتابة في الـ Cache لسهولة المشاركة
+        directory: 'CACHE',
         encoding: 'utf8'
       });
 
-      // 2. استدعاء شاشة المشاركة الرسمية للأندرويد
       await window.Capacitor.Plugins.Share.share({
         title: 'تصدير البيانات',
         text: `ملف ${filename}`,
         url: writeResult.uri,
         dialogTitle: 'حفظ أو مشاركة الملف'
       });
-
     } catch (err) {
       console.error("Export Error:", err);
-      alert("حدث خطأ أثناء التصدير: " + (err.message || err));
+      alert("خطأ أثناء التصدير: " + (err.message || err));
     }
   } else {
-    // كود التنزيل المعتاد للمتصفح
     const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
