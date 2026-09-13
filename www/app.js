@@ -6,6 +6,7 @@ const DEFAULT_CATEGORIES = ["طعام", "مواصلات", "سكن", "فواتي�
 const defaultState = {
   transactions: [],
   loans: [],
+  transfers: [],
   wallets: [],
   settings: {
     passwordHash: "",
@@ -71,6 +72,14 @@ const el = {
   loanSubmitBtn: document.getElementById("loanSubmitBtn"),
   loanCancelEditBtn: document.getElementById("loanCancelEditBtn"),
   loansTableBody: document.getElementById("loansTableBody"),
+
+  transferForm: document.getElementById("transferForm"),
+  transferAmount: document.getElementById("transferAmount"),
+  transferFromWallet: document.getElementById("transferFromWallet"),
+  transferToWallet: document.getElementById("transferToWallet"),
+  transferDate: document.getElementById("transferDate"),
+  transferDetails: document.getElementById("transferDetails"),
+  transfersTableBody: document.getElementById("transfersTableBody"),
 
   filtersForm: document.getElementById("filtersForm"),
   filterKeyword: document.getElementById("filterKeyword"),
@@ -155,6 +164,9 @@ function bindEvents() {
   el.loanCancelEditBtn.addEventListener("click", resetLoanForm);
   el.loansTableBody.addEventListener("click", onLoanTableClick);
 
+  if (el.transferForm) el.transferForm.addEventListener("submit", onSaveTransfer);
+  if (el.transfersTableBody) el.transfersTableBody.addEventListener("click", onTransferTableClick);
+
   el.filtersForm.addEventListener("submit", onApplyFilters);
   el.clearFiltersBtn.addEventListener("click", clearFilters);
   el.statsFilterForm.addEventListener("submit", onApplyStatsRange);
@@ -193,6 +205,7 @@ function loadState() {
       transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
       loans: Array.isArray(parsed.loans) ? parsed.loans : [],
       wallets: Array.isArray(parsed.wallets) ? parsed.wallets : [],
+      transfers: Array.isArray(parsed.transfers) ? parsed.transfers : [],
       settings: {
         passwordHash: parsed?.settings?.passwordHash || "",
         salt: parsed?.settings?.salt || "",
@@ -315,6 +328,7 @@ function activateTab(tabId) {
 function setDefaultDateTimes() {
   el.txDate.value = getNowLocalDateTimeValue();
   el.loanDate.value = getNowLocalDateTimeValue();
+  if (el.transferDate) el.transferDate.value = getNowLocalDateTimeValue();
 }
 
 function setDefaultReportRange() {
@@ -650,6 +664,7 @@ function renderAll() {
   if (!document.getElementById("statsTab").classList.contains("hidden")) {
     renderStats();
   }
+  renderTransfersTable();
 }
 
 function renderWalletsCards() {
@@ -672,6 +687,7 @@ function renderWalletsCards() {
   `).join("");
 
   el.walletsCardsContainer.innerHTML = cardsHtml;
+
 }
 
 function renderWalletsDropdown() {
@@ -688,6 +704,10 @@ function renderWalletsDropdown() {
     el.loanWallet.innerHTML = walletOptions;
     if (state.wallets.length > 0 && !el.loanWallet.value) el.loanWallet.value = state.wallets[0].id;
   }
+
+  if (el.transferFromWallet) el.transferFromWallet.innerHTML = walletOptions;
+  if (el.transferToWallet) el.transferToWallet.innerHTML = walletOptions;
+
 }
 
 function normalizeCategories(categories) {
@@ -1778,4 +1798,101 @@ if (closeToastBtn && balanceToastModal) {
   closeToastBtn.addEventListener('click', () => {
     balanceToastModal.classList.add('hidden');
   });
+}
+
+function onSaveTransfer(event) {
+  event.preventDefault();
+
+  const amount = Number(el.transferAmount.value);
+  const fromWalletId = el.transferFromWallet.value;
+  const toWalletId = el.transferToWallet.value;
+  const dateTime = el.transferDate.value;
+  const details = cleanText(el.transferDetails.value);
+
+  if (!amount || amount <= 0 || !fromWalletId || !toWalletId || !dateTime) {
+    showToast("يرجى ملء كافة البيانات المطلوبة للتحويل");
+    return;
+  }
+
+  if (fromWalletId === toWalletId) {
+    showToast("لا يمكن التحويل لنفس المحفظة");
+    return;
+  }
+
+  const fromWallet = state.wallets.find(w => w.id === fromWalletId);
+  const toWallet = state.wallets.find(w => w.id === toWalletId);
+
+  if (!fromWallet || !toWallet) {
+    showToast("المحفظة المحددة غير موجودة");
+    return;
+  }
+
+  // تحديث أرصدة المحافظ
+  fromWallet.balance -= amount;
+  toWallet.balance += amount;
+
+  const payload = {
+    id: generateId(),
+    amount,
+    fromWalletId,
+    toWalletId,
+    dateTime,
+    details,
+    createdAt: new Date().toISOString()
+  };
+
+  state.transfers.push(payload);
+  saveState();
+
+  el.transferForm.reset();
+  if (el.transferDate) el.transferDate.value = getNowLocalDateTimeValue();
+
+  showToast("تم التحويل بنجاح");
+  renderAll();
+}
+
+function renderTransfersTable() {
+  if (!el.transfersTableBody) return;
+
+  const rows = [...(state.transfers || [])].sort(sortByDateDesc).map((tr) => {
+    const fromWallet = state.wallets.find(w => w.id === tr.fromWalletId);
+    const toWallet = state.wallets.find(w => w.id === tr.toWalletId);
+
+    return `
+      <tr>
+        <td data-label="المبلغ">${formatMoney(tr.amount)}</td>
+        <td data-label="من محفظة">${escapeHtml(fromWallet ? fromWallet.name : "غير محددة")}</td>
+        <td data-label="إلى محفظة">${escapeHtml(toWallet ? toWallet.name : "غير محددة")}</td>
+        <td data-label="الوقت">${formatDateTime(tr.dateTime)}</td>
+        <td data-label="التفاصيل">${escapeHtml(tr.details || "-")}</td>
+        <td data-label="إجراء">
+          <button class="btn" data-action="delete" data-id="${tr.id}">حذف</button>
+        </td>
+      </tr>`;
+  });
+
+  el.transfersTableBody.innerHTML = rows.join("") || `<tr><td colspan="6">لا توجد تحويلات بعد</td></tr>`;
+}
+
+function onTransferTableClick(event) {
+  const btn = event.target.closest("button[data-action='delete']");
+  if (!btn) return;
+
+  const id = btn.dataset.id;
+  const transfer = state.transfers.find(t => t.id === id);
+  if (!transfer) return;
+
+  if (!confirm("هل تريد حذف هذا التحويل وإلغاء أثره المالي؟")) return;
+
+  const fromWallet = state.wallets.find(w => w.id === transfer.fromWalletId);
+  const toWallet = state.wallets.find(w => w.id === transfer.toWalletId);
+
+  // إرجاع المبالغ للمحافظ
+  if (fromWallet) fromWallet.balance += transfer.amount;
+  if (toWallet) toWallet.balance -= transfer.amount;
+
+  state.transfers = state.transfers.filter(t => t.id !== id);
+  saveState();
+  renderAll();
+  showToast("تم حذف التحويل والتراجع عن العملية");
 }
