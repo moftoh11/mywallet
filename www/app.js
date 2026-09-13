@@ -1581,32 +1581,31 @@ function onImportJsonBackup(event) {
 }
 
 async function downloadFile(filename, type, content) {
-  // لو شغال على أندرويد (تطبيق Capacitor)
+  // التأكد إننا جوة تطبيق الأندرويد Native
   if (window.Capacitor && window.Capacitor.isNativePlatform()) {
     try {
-      // 1. كتابة الملف في مجلد Cache/Documents الخاص بالتطبيق
-      const result = await Filesystem.writeFile({
+      // 1. كتابة الملف في مساحات التطبيق المؤقتة
+      const writeResult = await window.Capacitor.Plugins.Filesystem.writeFile({
         path: filename,
         data: content,
-        directory: Directory.Cache,
-        encoding: Encoding.UTF8
+        directory: 'CACHE', // كتابة في الـ Cache لسهولة المشاركة
+        encoding: 'utf8'
       });
 
-      // 2. فتح قائمة المشاركة لإنزال الملف أو حفظه في الموبايل
-      await Share.share({
-        title: 'تصدير بيانات المحفظة',
+      // 2. استدعاء شاشة المشاركة الرسمية للأندرويد
+      await window.Capacitor.Plugins.Share.share({
+        title: 'تصدير البيانات',
         text: `ملف ${filename}`,
-        url: result.uri,
-        dialogTitle: 'حفظ الملف أو مشاركته'
+        url: writeResult.uri,
+        dialogTitle: 'حفظ أو مشاركة الملف'
       });
 
-      showToast("تم جاهزية الملف للتصدير");
     } catch (err) {
       console.error("Export Error:", err);
-      showToast("فشل تصدير الملف على الجهاز");
+      alert("حدث خطأ أثناء التصدير: " + (err.message || err));
     }
   } else {
-    // لو شغال على متصفح عادي (Web Browser)
+    // كود التنزيل المعتاد للمتصفح
     const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1618,7 +1617,6 @@ async function downloadFile(filename, type, content) {
     URL.revokeObjectURL(url);
   }
 }
-
 
 function showWalletsPreview() {
   const content = state.wallets.map(w => `${w.name}: ${formatMoney(w.balance)}`).join("\n");
