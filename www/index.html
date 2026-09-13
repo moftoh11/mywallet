@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
@@ -126,6 +126,7 @@
         <button class="tab-btn active" data-tab="transactionsTab">المعاملات</button>
         <button class="tab-btn" data-tab="loansTab">السلف</button>
         <button class="tab-btn" data-tab="recordsTab">السجل والبحث</button>
+        <button class="tab-btn" data-tab="transfersTab">التحويل الداخلي</button>
         <button class="tab-btn" data-tab="statsTab">الإحصائيات</button>
         <button class="tab-btn" data-tab="reportsTab">التقارير</button>
         <button class="tab-btn" data-tab="settingsTab">الإعدادات</button>
@@ -233,11 +234,10 @@
     </div>
   </div>
 </div>
-<!-- داخل #loanForm -->
-<div class="form-group">
-  <label for="loanWallet">المحفظة <span class="required">*</span></label>
-  <select id="loanWallet" class="form-control" required>
-    <!-- سيتم تعبئتها أوتوماتيكياً عبر JS -->
+<div class="input-group">
+  <label for="loanWallet">المحفظة</label>
+  <select id="loanWallet" required>
+    <option value="">اختر المحفظة</option>
   </select>
 </div>
           <div class="input-group">
@@ -343,6 +343,61 @@
               </tr>
             </thead>
             <tbody id="recordsTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+      
+      <section id="transfersTab" class="tab-content card hidden">
+        <h3>إجراء تحويل بين المحافظ</h3>
+        <form id="transferForm" class="grid-form">
+          <div class="input-group">
+            <label for="transferAmount">المبلغ</label>
+            <input type="number" id="transferAmount" min="0.01" step="0.01" required />
+          </div>
+
+          <div class="input-group">
+            <label for="transferFromWallet">من محفظة</label>
+            <select id="transferFromWallet" required>
+              <option value="">اختر المحفظة</option>
+            </select>
+          </div>
+
+          <div class="input-group">
+            <label for="transferToWallet">إلى محفظة</label>
+            <select id="transferToWallet" required>
+              <option value="">اختر المحفظة</option>
+            </select>
+          </div>
+
+          <div class="input-group">
+            <label for="transferDate">التاريخ والوقت</label>
+            <input type="datetime-local" id="transferDate" required />
+          </div>
+
+          <div class="full-width input-group">
+            <label for="transferDetails">التفاصيل (اختياري)</label>
+            <textarea id="transferDetails" rows="2" placeholder="أدخل التفاصيل هنا..."></textarea>
+          </div>
+
+          <div class="form-actions full-width">
+            <button type="submit" class="btn btn-primary" id="transferSubmitBtn">تأكيد التحويل</button>
+          </div>
+        </form>
+
+        <h3>سجل التحويلات</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>المبلغ</th>
+                <th>من محفظة</th>
+                <th>إلى محفظة</th>
+                <th>الوقت</th>
+                <th>التفاصيل</th>
+                <th>إجراء</th>
+              </tr>
+            </thead>
+            <tbody id="transfersTableBody"></tbody>
           </table>
         </div>
       </section>
